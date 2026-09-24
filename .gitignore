@@ -1,0 +1,17 @@
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# Gradle
+.gradle/
+**/build/
+
+# Kotlin
+out/
+
+# macOS
+.DS_Store
+
+# Local files
+local.properties
+.env
