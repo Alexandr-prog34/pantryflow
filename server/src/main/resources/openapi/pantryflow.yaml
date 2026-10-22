@@ -1,0 +1,601 @@
+openapi: 3.0.3
+info:
+  title: PantryFlow API
+  version: 1.0.0
+  description: |
+    REST API лабораторного проекта PantryFlow. Авторизация пока не реализована:
+    идентификаторы пользователей в запросах не подтверждают права доступа.
+    Все количества в JSON передаются строками, даты — в формате YYYY-MM-DD.
+servers:
+  - url: /
+    description: Тот же сервер, на котором открыта документация
+tags:
+  - name: Состояние
+  - name: Пользователи
+  - name: Дома
+  - name: Продукты и партии
+  - name: Покупки
+
+paths:
+  /health:
+    get:
+      tags: [Состояние]
+      summary: Проверить доступность сервера
+      operationId: health
+      responses:
+        '200':
+          description: Сервер работает
+          content:
+            text/plain:
+              schema:
+                type: string
+                enum: [ok]
+
+  /api/v1/users:
+    post:
+      tags: [Пользователи]
+      summary: Создать пользователя
+      description: Email приводится к нижнему регистру; email и имя обрезаются по краям.
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+            example:
+              email: alex@example.com
+              displayName: Alex
+      responses:
+        '201': { $ref: '#/components/responses/UserCreated' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/v1/users/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [Пользователи]
+      summary: Получить пользователя
+      operationId: getUser
+      responses:
+        '200': { $ref: '#/components/responses/UserOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/v1/users/{userId}/households:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [Дома]
+      summary: Список домов пользователя
+      operationId: listUserHouseholds
+      responses:
+        '200':
+          description: Дома, в которых состоит пользователь
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HouseholdResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/v1/households:
+    post:
+      tags: [Дома]
+      summary: Создать дом
+      description: Указанный пользователь становится участником с ролью OWNER.
+      operationId: createHousehold
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateHouseholdRequest'
+      responses:
+        '201': { $ref: '#/components/responses/HouseholdCreated' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/v1/households/join:
+    post:
+      tags: [Дома]
+      summary: Присоединиться к дому по коду
+      description: Код приглашения принимается без учёта регистра и пробелов по краям.
+      operationId: joinHousehold
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinHouseholdRequest'
+      responses:
+        '200': { $ref: '#/components/responses/HouseholdOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/v1/households/{householdId}/products:
+    parameters:
+      - $ref: '#/components/parameters/HouseholdId'
+    get:
+      tags: [Продукты и партии]
+      summary: Список продуктов и текущих остатков
+      operationId: listProducts
+      responses:
+        '200':
+          description: Продукты дома
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [Продукты и партии]
+      summary: Добавить продукт в дом
+      operationId: createProduct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductRequest'
+      responses:
+        '201': { $ref: '#/components/responses/ProductCreated' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/v1/households/{householdId}/products/low-stock:
+    parameters:
+      - $ref: '#/components/parameters/HouseholdId'
+    get:
+      tags: [Продукты и партии]
+      summary: Продукты с остатком ниже минимума
+      description: Продукт попадает в ответ только если currentQuantity < minimumQuantity.
+      operationId: listLowStock
+      responses:
+        '200':
+          description: Продукты с низким остатком
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/v1/households/{householdId}/products/{productId}/batches:
+    parameters:
+      - $ref: '#/components/parameters/HouseholdId'
+      - $ref: '#/components/parameters/ProductId'
+    get:
+      tags: [Продукты и партии]
+      summary: Список партий продукта
+      operationId: listBatches
+      responses:
+        '200':
+          description: Партии продукта
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BatchResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [Продукты и партии]
+      summary: Добавить партию продукта
+      operationId: createBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBatchRequest'
+      responses:
+        '201': { $ref: '#/components/responses/BatchCreated' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/v1/households/{householdId}/batches/{batchId}/quantity:
+    parameters:
+      - $ref: '#/components/parameters/HouseholdId'
+      - $ref: '#/components/parameters/BatchId'
+    patch:
+      tags: [Продукты и партии]
+      summary: Изменить количество в партии
+      description: Delta может быть положительной или отрицательной, но не нулевой. Остаток партии не может стать отрицательным.
+      operationId: adjustBatchQuantity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdjustBatchRequest'
+      responses:
+        '200': { $ref: '#/components/responses/BatchOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/v1/households/{householdId}/shopping-items:
+    parameters:
+      - $ref: '#/components/parameters/HouseholdId'
+    get:
+      tags: [Покупки]
+      summary: Общий список покупок дома
+      operationId: listShoppingItems
+      responses:
+        '200':
+          description: Позиции списка покупок
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ShoppingItemResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [Покупки]
+      summary: Добавить продукт в список покупок
+      operationId: createShoppingItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateShoppingItemRequest'
+      responses:
+        '201': { $ref: '#/components/responses/ShoppingItemCreated' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/v1/households/{householdId}/shopping-items/{itemId}/purchase:
+    parameters:
+      - $ref: '#/components/parameters/HouseholdId'
+      - $ref: '#/components/parameters/ItemId'
+    post:
+      tags: [Покупки]
+      summary: Провести покупку
+      description: Позиция помечается купленной и создаётся партия продукта в одной транзакции.
+      operationId: purchaseShoppingItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseRequest'
+      responses:
+        '200': { $ref: '#/components/responses/PurchaseOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/v1/households/{householdId}/shopping-items/{itemId}:
+    parameters:
+      - $ref: '#/components/parameters/HouseholdId'
+      - $ref: '#/components/parameters/ItemId'
+    delete:
+      tags: [Покупки]
+      summary: Удалить некупленную позицию
+      operationId: deleteShoppingItem
+      responses:
+        '204':
+          description: Позиция удалена; тела ответа нет
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+components:
+  parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    HouseholdId:
+      name: householdId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ProductId:
+      name: productId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    BatchId:
+      name: batchId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ItemId:
+      name: itemId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  schemas:
+    Quantity:
+      type: string
+      description: Десятичное число строкой, максимум 3 знака после точки и значение до 999999999.999.
+      example: '2.500'
+    PositiveQuantity:
+      type: string
+      description: Положительное десятичное число строкой, максимум 3 знака после точки и значение до 999999999.999.
+      example: '2.500'
+    TotalQuantity:
+      type: string
+      description: Сумма остатков партий; может превышать ограничение для одной партии.
+      example: '5.000'
+    Storage:
+      type: string
+      enum: [FRIDGE, FREEZER, CABINET, PANTRY]
+    UnitOfMeasure:
+      type: string
+      enum: [PIECE, GRAM, MILLILITER]
+    ShoppingStatus:
+      type: string
+      enum: [OPEN, PURCHASED]
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [INVALID_INPUT, INVALID_REQUEST, NOT_FOUND, CONFLICT, INTERNAL_ERROR]
+        message:
+          type: string
+
+    CreateUserRequest:
+      type: object
+      required: [email, displayName]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 320
+          example: alex@example.com
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: Alex
+    UserResponse:
+      type: object
+      required: [id, email, displayName]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        displayName: { type: string }
+
+    CreateHouseholdRequest:
+      type: object
+      required: [ownerId, name]
+      properties:
+        ownerId: { type: string, format: uuid }
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: Our home
+    JoinHouseholdRequest:
+      type: object
+      required: [userId, inviteCode]
+      properties:
+        userId: { type: string, format: uuid }
+        inviteCode:
+          type: string
+          description: Код дома из ответа на создание; 12 символов, регистр не важен.
+          example: ABCDEFGHJKL2
+    HouseholdResponse:
+      type: object
+      required: [id, name, inviteCode]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        inviteCode:
+          type: string
+          minLength: 12
+          maxLength: 12
+          example: ABCDEFGHJKL2
+
+    CreateProductRequest:
+      type: object
+      required: [name, unit]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+          example: Milk
+        category:
+          type: string
+          nullable: true
+          maxLength: 80
+          description: Пустая строка после обрезки превращается в null.
+          example: Dairy
+        unit:
+          $ref: '#/components/schemas/UnitOfMeasure'
+        minimumQuantity:
+          allOf:
+            - $ref: '#/components/schemas/Quantity'
+          default: '0'
+    ProductResponse:
+      type: object
+      required: [id, householdId, name, category, unit, minimumQuantity, currentQuantity]
+      properties:
+        id: { type: string, format: uuid }
+        householdId: { type: string, format: uuid }
+        name: { type: string }
+        category: { type: string, nullable: true }
+        unit:
+          $ref: '#/components/schemas/UnitOfMeasure'
+        minimumQuantity:
+          $ref: '#/components/schemas/Quantity'
+        currentQuantity:
+          $ref: '#/components/schemas/TotalQuantity'
+
+    CreateBatchRequest:
+      type: object
+      required: [quantity, storage]
+      properties:
+        quantity:
+          $ref: '#/components/schemas/PositiveQuantity'
+        storage:
+          $ref: '#/components/schemas/Storage'
+        purchasedOn: { type: string, format: date, nullable: true }
+        expiresOn:
+          type: string
+          format: date
+          nullable: true
+          description: Если обе даты указаны, не может быть раньше purchasedOn.
+    BatchResponse:
+      type: object
+      required: [id, householdId, productId, quantity, storage, purchasedOn, expiresOn]
+      properties:
+        id: { type: string, format: uuid }
+        householdId: { type: string, format: uuid }
+        productId: { type: string, format: uuid }
+        quantity:
+          $ref: '#/components/schemas/Quantity'
+        storage:
+          $ref: '#/components/schemas/Storage'
+        purchasedOn: { type: string, format: date, nullable: true }
+        expiresOn: { type: string, format: date, nullable: true }
+    AdjustBatchRequest:
+      type: object
+      required: [delta]
+      properties:
+        delta:
+          type: string
+          description: Ненулевое изменение от -999999999.999 до 999999999.999, максимум 3 знака после точки.
+          example: '-2'
+
+    CreateShoppingItemRequest:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId: { type: string, format: uuid }
+        quantity:
+          $ref: '#/components/schemas/PositiveQuantity'
+    ShoppingItemResponse:
+      type: object
+      required: [id, householdId, productId, quantity, status]
+      properties:
+        id: { type: string, format: uuid }
+        householdId: { type: string, format: uuid }
+        productId: { type: string, format: uuid }
+        quantity:
+          $ref: '#/components/schemas/PositiveQuantity'
+        status:
+          $ref: '#/components/schemas/ShoppingStatus'
+    PurchaseRequest:
+      type: object
+      required: [storage]
+      properties:
+        storage:
+          $ref: '#/components/schemas/Storage'
+        purchasedOn: { type: string, format: date, nullable: true }
+        expiresOn:
+          type: string
+          format: date
+          nullable: true
+          description: Если обе даты указаны, не может быть раньше purchasedOn.
+    PurchaseResponse:
+      type: object
+      required: [item, batch]
+      properties:
+        item:
+          $ref: '#/components/schemas/ShoppingItemResponse'
+        batch:
+          $ref: '#/components/schemas/BatchResponse'
+
+  responses:
+    UserCreated:
+      description: Пользователь создан
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/UserResponse' }
+    UserOk:
+      description: Пользователь найден
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/UserResponse' }
+    HouseholdCreated:
+      description: Дом создан
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/HouseholdResponse' }
+    HouseholdOk:
+      description: Дом найден; пользователь присоединён
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/HouseholdResponse' }
+    ProductCreated:
+      description: Продукт создан
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ProductResponse' }
+    BatchCreated:
+      description: Партия создана
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/BatchResponse' }
+    BatchOk:
+      description: Количество партии изменено
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/BatchResponse' }
+    ShoppingItemCreated:
+      description: Позиция добавлена
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ShoppingItemResponse' }
+    PurchaseOk:
+      description: Покупка проведена
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/PurchaseResponse' }
+    BadRequest:
+      description: Ошибка формата запроса, UUID или входных значений
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: Пользователь, дом, продукт, партия или позиция не найдены
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: Дублирование или недопустимое изменение состояния
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    InternalError:
+      description: Внутренняя ошибка сервера
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }

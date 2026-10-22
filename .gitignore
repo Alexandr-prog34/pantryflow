@@ -7,7 +7,7 @@
 **/build/
 
 # Kotlin
-out/
+/out/
 
 # macOS
 .DS_Store
