@@ -1,6 +1,7 @@
 ktor:
   deployment:
+    host: 0.0.0.0
     port: 8080
   application:
     modules:
-      - com.pantryflow.RoutingKt.configureRouting
+      - com.pantryflow.bootstrap.ApplicationKt.module
